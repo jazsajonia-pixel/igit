@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.Igit" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#80C7FF</item>
+        <item name="android:statusBarColor">#111211</item>
+        <item name="android:navigationBarColor">#111211</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#111211</item>
+    </style>
+</resources>
