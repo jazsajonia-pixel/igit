@@ -4,7 +4,8 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/igit_mark"
+        android:icon="@mipmap/igit_launcher"
+        android:roundIcon="@mipmap/igit_launcher"
         android:label="igit"
         android:supportsRtl="true"
         android:theme="@style/Theme.Igit"

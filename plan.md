@@ -28,7 +28,7 @@ Use native Kotlin and Jetpack Compose for the Android UI. JGit performs Git oper
 - **Spacing and shape:** 8dp base spacing; 12–20dp surface radii; restrained separators and elevation, avoiding excessive card nesting.
 - **Layout:** one-handed portrait dashboard with grouped repository activity, branch/issues/PR controls, sync action, remote/folder connection, settings, then a persistent three-destination bottom bar.
 - **Motion:** short 140–220ms state transitions and progress feedback; no decorative looping motion.
-- **Brand:** working name **igit**, positioned as a calm pocket Git workspace; personality: practical, clear, dependable. A distinct linked-commit mark is used instead of GitSync branding.
+- **Brand:** working name **igit**, positioned as a calm pocket Git workspace; personality: practical, clear, dependable. The launcher uses the user-supplied monochrome igit logo on a white Android adaptive-icon background.
 
 ## Project structure
 
