@@ -27,7 +27,7 @@ The debug APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## GitHub access
 
-The current connection flow uses a GitHub personal access token entered in-app, rather than OAuth. Use a fine-grained token with access limited to the selected repositories and the permissions needed for contents, issues, and pull requests. The token stays on-device in encrypted storage. Never commit it to the repository.
+The current connection flow uses a GitHub personal access token entered in-app, rather than OAuth. Read-only repository access is sufficient to clone and download. Uploading local edits requires a fine-grained token with **Contents: read and write** for the selected repository; issues and pull requests need their corresponding permissions. The token stays on-device in encrypted storage. Never commit it to the repository.
 
 ## AI access
 

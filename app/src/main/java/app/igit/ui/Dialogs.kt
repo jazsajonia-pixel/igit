@@ -58,7 +58,7 @@ fun ConnectRepoDialog(
         title = { Text("Connect GitHub") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Use a GitHub personal access token. For private repositories, grant repository access only to the repos you need.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Use a GitHub personal access token. Read-only access can download repositories. To upload local edits, grant Contents: read and write for the selected repository. For private repositories, limit access to the repos you need.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = token,
                     onValueChange = { token = it },

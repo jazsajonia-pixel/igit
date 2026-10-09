@@ -1,6 +1,7 @@
 package app.igit
 
 import app.igit.data.Validation
+import app.igit.git.shouldPush
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,5 +22,12 @@ class ValidationTest {
         assertTrue(Validation.isSafeRelativePath("src/main.kt"))
         assertFalse(Validation.isSafeRelativePath("../../secrets"))
         assertFalse(Validation.isSafeRelativePath("/absolute/path"))
+    }
+
+    @Test fun onlyPushesWhenLocalBranchDiffersFromRemoteBranch() {
+        assertFalse(shouldPush("abc123", "abc123"))
+        assertTrue(shouldPush("def456", "abc123"))
+        assertTrue(shouldPush("abc123", null))
+        assertFalse(shouldPush(null, null))
     }
 }

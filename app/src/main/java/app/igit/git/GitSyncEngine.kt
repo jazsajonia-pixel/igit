@@ -23,6 +23,9 @@ data class SyncOutcome(
 
 data class ConflictResolutionOutcome(val branch: String, val exportError: String? = null)
 
+internal fun shouldPush(localHead: String?, remoteBranchHead: String?): Boolean =
+    localHead != null && localHead != remoteBranchHead
+
 class GitSyncEngine(private val context: Context) {
     suspend fun sync(repo: RepoConfig, token: String, folderUri: Uri?, authorName: String = "igit", authorEmail: String = "igit@users.noreply.github.com", filters: String = ""): SyncOutcome = withContext(Dispatchers.IO) {
         require(token.isNotBlank()) { "Add a GitHub token before syncing." }
@@ -77,11 +80,31 @@ class GitSyncEngine(private val context: Context) {
                 return@withContext SyncOutcome("Working tree has local changes; sync paused", git.repository.branch, conflicts)
             }
 
-            git.push().setRemote("origin")
-                .setRefSpecs(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$branchName"))
-                .setCredentialsProvider(credentials).call()
+            val localHead = git.repository.resolve(Constants.HEAD)?.name
+            val remoteBranchHead = git.repository.resolve("refs/remotes/origin/$branchName")?.name
+            val pushNeeded = shouldPush(localHead, remoteBranchHead)
+            var pushError: String? = null
+            if (pushNeeded) {
+                runCatching {
+                    git.push().setRemote("origin")
+                        .setRefSpecs(org.eclipse.jgit.transport.RefSpec("HEAD:refs/heads/$branchName"))
+                        .setCredentialsProvider(credentials).call()
+                }.onFailure { pushError = it.message ?: "GitHub rejected the upload." }
+            }
             val exported = folderUri?.let { SafFolderMirror(context).export(root, it, baseline) } ?: 0
-            SyncOutcome("Sync complete", git.repository.branch, changedFiles = imported + exported)
+            val message = when {
+                pushError != null -> {
+                    val permissionHint = if (pushError.orEmpty().contains("git-receive-pack", ignoreCase = true) ||
+                        pushError.orEmpty().contains("permission", ignoreCase = true) ||
+                        pushError.orEmpty().contains("403")) {
+                        " (download succeeded; grant Contents: write to the token to upload local changes)"
+                    } else ""
+                    "Remote files downloaded; upload failed: $pushError$permissionHint"
+                }
+                !pushNeeded -> "Sync complete; no upload was needed."
+                else -> "Sync complete"
+            }
+            SyncOutcome(message, git.repository.branch, changedFiles = imported + exported)
         }
     }
 
