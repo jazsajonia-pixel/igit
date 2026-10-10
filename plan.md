@@ -32,17 +32,40 @@ Use native Kotlin and Jetpack Compose for the Android UI. JGit performs Git oper
 
 ## Project structure
 
-- `app/src/main/java/app/igit/MainActivity.kt` — app shell, navigation, connection/setup dialogs, folder picker, Compose dashboard and tabs.
-- `app/src/main/java/app/igit/data/` — GitHub REST client, AI client, repository/settings models, and persistence.
-- `app/src/main/java/app/igit/security/` — Android Keystore-backed encrypted secret vault.
-- `app/src/main/java/app/igit/git/` — JGit clone/sync/branch operations and SAF folder-mirror logic.
-- `app/src/main/java/app/igit/worker/` — WorkManager periodic sync worker.
-- `app/src/main/res/` — app theme, launcher identity, and Android resources.
-- `app/src/test/` — unit tests for deterministic parsing/validation helpers.
+- `MainActivity.kt`, `IgitApplication.kt` — entry points, intent routing (tiles, shortcuts, widgets, notifications).
+- `data/` — `Models.kt` (containers and settings), `ContainerStore.kt` (persistence + legacy migration), `Validation.kt` (URLs, sync messages), `GitHubApi.kt`, `AiClient.kt`, `Backup.kt` (encrypted backup).
+- `security/SecretVault.kt` — Android Keystore AES-GCM vault for tokens and keys.
+- `git/` — `GitSyncEngine.kt` (all Git operations, per-container lock), `GitAuth.kt` (HTTPS/SSH auth, SSH commit signer), `SshKeys.kt`, `SafFolderMirror.kt`.
+- `sync/` — `SyncRunner.kt`, `SyncWorker.kt` (WorkManager, notifications), `Triggers.kt` (tiles, widgets, shortcuts, intents, accessibility app sync).
+- `ui/` — `IgitViewModel.kt` (state + navigation), Home, Auto sync, Settings, Auth, Clone, Conflicts, Commit diff, Files, Chat, Issues/PRs/Actions.
+- `app/src/test/` — unit tests plus an end-to-end two-device sync test against a local bare repository.
+
+## GitSync parity (0.4.0)
+
+| GitSync feature | igit |
+| --- | --- |
+| Multiple repositories (containers) | Yes — add, rename, delete |
+| HTTP/S + SSH auth, any provider | Yes — token or Ed25519 / imported key |
+| OAuth (GitHub, GitLab, Gitea, Codeberg) | No — needs registered OAuth client IDs |
+| Clone, shallow depth, create new repo | Yes |
+| Sync / Manual / Download / Upload / Force pull / Force push | Yes |
+| Client mode (fetch, pull, stage & commit, push) | Yes |
+| Merge conflict editor | Yes — per block or whole file |
+| App sync (open/close), scheduled sync, tiles, shortcuts, widgets, intents | Yes |
+| Sync message + time format, author, signed commits, footer | Yes (SSH signing) |
+| .gitignore / exclude editors, disable SSL, optimised sync | Yes |
+| Branch + remote management, commit diffs | Yes |
+| File explorer, editor, image viewer, untrack | Yes |
+| Issues, PRs, Actions | GitHub only |
+| AI chat, commit wand, hide AI | Yes — bring your own key |
+| Encrypted backup / restore | Yes (igit format) |
+| Git LFS, git-crypt, All files access | No |
 
 ## Source references
 
 - GitSync public feature overview: https://github.com/ViscousPot/GitSync
 - GitSync public wiki overview: https://gitsync.viscouspotenti.al/wiki/
+- GitSync Repository Settings: https://gitsync.viscouspotenti.al/wiki/repository-settings/
+- GitSync Sync Options: https://gitsync.viscouspotenti.al/wiki/sync-options/
 - Android Gradle Plugin 9.4 compatibility: https://developer.android.com/build/releases/agp-9-4-0-release-notes
 - Jetpack Compose setup and compatibility: https://developer.android.com/develop/ui/compose/setup-compose-dependencies-and-compiler

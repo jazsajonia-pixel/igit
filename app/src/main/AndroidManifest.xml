@@ -1,8 +1,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Lets App Sync list launchable apps to monitor (no broad package visibility). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
+        android:name=".IgitApplication"
         android:allowBackup="false"
         android:icon="@mipmap/igit_launcher"
         android:roundIcon="@mipmap/igit_launcher"
@@ -12,11 +22,95 @@
         android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+
+        <activity
+            android:name=".sync.ShortcutSyncActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Quick Settings tiles -->
+        <service
+            android:name=".sync.SyncTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_sync"
+            android:label="@string/tile_sync"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".sync.ManualSyncTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_sync"
+            android:label="@string/tile_manual_sync"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Custom intent trigger (GitSync compatible: action INTENT_SYNC, extras index + message) -->
+        <service
+            android:name=".sync.IntentSyncService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="INTENT_SYNC" />
+            </intent-filter>
+        </service>
+        <receiver
+            android:name=".sync.IntentSyncReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="INTENT_SYNC" />
+                <action android:name="app.igit.INTENT_SYNC" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Sync when selected apps are opened/closed -->
+        <service
+            android:name=".sync.AppSyncAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_sync_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Home screen widgets -->
+        <receiver
+            android:name=".sync.SyncWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_sync_now">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
+        <receiver
+            android:name=".sync.ManualSyncWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_manual_sync">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
     </application>
 </manifest>

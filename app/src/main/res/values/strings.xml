@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">igit</string>
+    <string name="tile_sync">Sync</string>
+    <string name="tile_manual_sync">Manual Sync</string>
+    <string name="widget_sync_now">Sync Now</string>
+    <string name="widget_manual_sync">Manual Sync</string>
+    <string name="shortcut_sync">Sync</string>
+    <string name="shortcut_manual_sync">Manual Sync</string>
+    <string name="app_sync_service_label">igit App Sync</string>
+    <string name="app_sync_service_description">Lets igit sync your repository when the apps you selected are opened or closed. igit only reads which app is in the foreground; it does not read screen content or what you type.</string>
 </resources>

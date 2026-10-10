@@ -1,44 +1,42 @@
 package app.igit
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import app.igit.data.AppPreferences
+import androidx.activity.viewModels
 import app.igit.ui.IgitApp
 import app.igit.ui.IgitTheme
+import app.igit.ui.IgitViewModel
 
 class MainActivity : ComponentActivity() {
-    private var selectedFolder by mutableStateOf<Uri?>(null)
-    private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            runCatching {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }
-            AppPreferences(this).saveFolderUri(uri.toString())
-            selectedFolder = uri
-        }
-    }
+    private val viewModel: IgitViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selectedFolder = AppPreferences(this).getFolderUri()?.let(Uri::parse)
+        if (savedInstanceState == null) viewModel.handleIntent(intent)
         setContent {
             IgitTheme {
-                IgitApp(
-                    context = this,
-                    selectedFolder = selectedFolder,
-                    onPickFolder = { folderPicker.launch(selectedFolder) }
-                )
+                IgitApp(viewModel)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        viewModel.handleIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Pick up background syncs that happened while the app was away.
+        if (!viewModel.busy) viewModel.refresh()
+    }
+
+    companion object {
+        const val ACTION_MANUAL_SYNC = IgitViewModel.ACTION_MANUAL_SYNC
+        const val ACTION_RESOLVE_CONFLICTS = IgitViewModel.ACTION_RESOLVE_CONFLICTS
+        const val EXTRA_CONTAINER = IgitViewModel.EXTRA_CONTAINER
     }
 }
