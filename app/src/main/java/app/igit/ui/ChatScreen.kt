@@ -1,6 +1,5 @@
 package app.igit.ui
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,7 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,13 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import app.igit.data.AiClient
-import app.igit.data.AppPreferences
-import app.igit.data.CommitSummary
-import app.igit.data.RepoConfig
-import app.igit.git.GitSyncEngine
-import app.igit.security.SecretVault
-import app.igit.worker.SyncWorker
+import app.igit.data.AiMessage
+import app.igit.data.Validation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,22 +41,18 @@ import kotlinx.coroutines.withContext
 private data class ChatLine(val text: String, val fromUser: Boolean)
 
 @Composable
-fun ChatScreen(
-    context: Context,
-    repo: RepoConfig?,
-    aiEnabled: Boolean,
-    hasApiKey: Boolean,
-    branch: String,
-    commits: List<CommitSummary>,
-    onOpenSettings: () -> Unit
-) {
+fun ChatScreen(vm: IgitViewModel) {
+    val aiEnabled = vm.aiEnabled
+    val hasApiKey = vm.aiKeyStored
+    val repoName = Validation.repoNameFromUrl(vm.active.remoteUrl).ifBlank { vm.active.alias }
+    val branch = vm.branches.current ?: "-"
+    val commits = vm.commits
+    val onOpenSettings = { vm.navigate(Screen.GlobalSettings) }
     val messages = remember { mutableStateListOf<ChatLine>() }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val prefs = remember { AppPreferences(context) }
-    val vault = remember { SecretVault(context) }
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Chat", style = MaterialTheme.typography.headlineSmall)
         if (!aiEnabled || !hasApiKey) {
@@ -81,7 +71,7 @@ fun ChatScreen(
             LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 if (messages.isEmpty()) item {
                     Text(
-                        "Ask about ${repo?.fullName ?: "Git, branches, or commits"}. Requests go directly to your chosen AI endpoint and include the repository name, current branch, recent commit titles, and up to 60 local file paths—never file contents.",
+                        "Ask about $repoName. Requests go directly to your chosen AI endpoint and include the repository name, current branch, recent commit titles, and up to 60 local file paths—never file contents.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -108,38 +98,38 @@ fun ChatScreen(
                 IconButton(enabled = input.isNotBlank() && !busy, onClick = {
                     val prompt = input.trim()
                     input = ""
+                    val history = messages.map { AiMessage(if (it.fromUser) "user" else "assistant", it.text) }
                     messages += ChatLine(prompt, true)
                     error = null
                     busy = true
                     scope.launch {
                         val answer = withContext(Dispatchers.IO) {
                             runCatching {
-                                val key = vault.get(SyncWorker.AI_API_KEY).orEmpty()
-                                val filePaths = repo?.let { GitSyncEngine(context).workingFiles(it) }.orEmpty()
+                                val filePaths = (if (vm.cloned) vm.runner.engine.workingFiles(vm.active) else emptyList())
                                     .filterNot { path ->
                                         val name = path.substringAfterLast('/').lowercase()
                                         name.startsWith(".env") || name.endsWith(".pem") || name.endsWith(".keystore") || name.contains("secret")
                                     }
                                     .take(60)
                                 val repoContext = buildString {
-                                    if (repo != null) append("Repository: ").append(repo.fullName).append('\n')
+                                    append("Repository: ").append(repoName).append('\n')
                                     append("Current branch: ").append(branch).append('\n')
                                     if (commits.isNotEmpty()) {
                                         append("Recent commits:\n")
-                                        commits.take(5).forEach { append("- ").append(it.sha).append(" ").append(it.message).append(" (by ").append(it.author).append(")\n") }
+                                        commits.take(5).forEach { append("- ").append(it.shortSha).append(" ").append(it.message).append(" (by ").append(it.author).append(")\n") }
                                     }
                                     if (filePaths.isNotEmpty()) {
                                         append("Local file paths (contents not provided):\n")
                                         filePaths.forEach { append("- ").append(it).append('\n') }
                                     }
                                 }
-                                AiClient(prefs.getAiBaseUrl(), key, prefs.getAiModel()).ask(prompt, repoContext)
+                                vm.aiClient().ask(prompt, repoContext, history)
                             }
                         }
                         answer.onSuccess { messages += ChatLine(it, false) }.onFailure { error = it.message ?: "AI request failed." }
                         busy = false
                     }
-                }) { Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary) }
+                }) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary) }
             }
         }
     }

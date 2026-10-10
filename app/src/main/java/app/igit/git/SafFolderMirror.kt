@@ -46,22 +46,42 @@ class SafFolderMirror(private val context: Context) {
         imported
     }
 
-    suspend fun export(worktree: File, treeUri: Uri, baselineFile: File): Int = withContext(Dispatchers.IO) {
+    /**
+     * Writes worktree files to the folder. Only files whose content differs from the last export are written,
+     * files removed from the repository are deleted, and with [overwriteLocal] any extra local files are removed too.
+     */
+    suspend fun export(worktree: File, treeUri: Uri, baselineFile: File, overwriteLocal: Boolean = false): Int = withContext(Dispatchers.IO) {
         val root = DocumentFile.fromTreeUri(context, treeUri) ?: error("The selected folder is no longer available. Re-select it.")
         val previous = readBaseline(baselineFile)
         val sourceFiles = collectWorktreeFiles(worktree)
+        val hashes = sourceFiles.mapValues { (_, file) -> sha256(file) }
 
         previous.keys.filter { it !in sourceFiles }.forEach { relative ->
             findDocument(root, relative)?.delete()
         }
+        if (overwriteLocal) {
+            val current = linkedMapOf<String, DocumentFile>()
+            collectDocuments(root, "", current, 0)
+            current.filterKeys { it !in sourceFiles }.values.forEach { it.delete() }
+        }
 
         var written = 0
+        val folderCache = HashMap<String, DocumentFile>()
         sourceFiles.forEach { (relative, source) ->
-            var parent = root
             val parts = relative.split('/')
+            val unchanged = previous[relative] == hashes[relative]
+            if (unchanged && !overwriteLocal) {
+                // Cheap existence check only for files we believe are already in place.
+                if (findDocument(root, relative) != null) return@forEach
+            }
+            var parent = root
+            var path = ""
             parts.dropLast(1).forEach { part ->
-                parent = parent.findFile(part)?.takeIf { it.isDirectory } ?: parent.createDirectory(part)
-                    ?: error("Could not create folder $part")
+                path = if (path.isEmpty()) part else "$path/$part"
+                parent = folderCache.getOrPut(path) {
+                    parent.findFile(part)?.takeIf { it.isDirectory } ?: parent.createDirectory(part)
+                        ?: error("Could not create folder $part")
+                }
             }
             val name = parts.last()
             val target = parent.findFile(name)?.takeIf { it.isFile }
@@ -74,10 +94,16 @@ class SafFolderMirror(private val context: Context) {
         }
 
         val newBaseline = JSONObject()
-        sourceFiles.forEach { (relative, source) -> newBaseline.put(relative, sha256(source)) }
+        hashes.forEach { (relative, hash) -> newBaseline.put(relative, hash) }
         baselineFile.parentFile?.mkdirs()
         baselineFile.writeText(newBaseline.toString())
         written
+    }
+
+    /** True when the selected folder has no visible files (GitSync's "Folder Not Empty" check before cloning). */
+    suspend fun isEmpty(treeUri: Uri): Boolean = withContext(Dispatchers.IO) {
+        val root = DocumentFile.fromTreeUri(context, treeUri) ?: return@withContext true
+        root.listFiles().none { it.name != null && it.name != ".git" }
     }
 
     private fun readBaseline(file: File): Map<String, String> = runCatching {
@@ -104,11 +130,10 @@ class SafFolderMirror(private val context: Context) {
     }
 
     private fun collectWorktreeFiles(root: File): Map<String, File> = buildMap {
-        root.walkTopDown().forEach { file ->
-            if (file.isDirectory && file != root && file.name == ".git") return@forEach
+        root.walkTopDown().onEnter { it == root || it.name != ".git" }.forEach { file ->
             if (!file.isFile) return@forEach
             val relative = file.relativeTo(root).invariantSeparatorsPath
-            if (relative.startsWith(".git/") || relative == ".igit-mirror-baseline.json") return@forEach
+            if (relative.startsWith(".git/") || relative == ".git" || relative == ".igit-mirror-baseline.json") return@forEach
             if (Validation.isSafeRelativePath(relative) && size < MAX_FILES) put(relative, file)
         }
     }

@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-private val IgitColors = darkColorScheme(
+private val IgitColorScheme = darkColorScheme(
     primary = Color(0xFF80C7FF),
     onPrimary = Color(0xFF08131C),
     secondary = Color(0xFF7DE2A2),
@@ -27,7 +27,7 @@ private val IgitColors = darkColorScheme(
 @Composable
 fun IgitTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = IgitColors,
+        colorScheme = IgitColorScheme,
         typography = MaterialTheme.typography.copy(
             headlineSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 24.sp),
             titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 20.sp),

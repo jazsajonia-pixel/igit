@@ -1,0 +1,22 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_sync"
+        android:shortcutId="sync"
+        android:shortcutShortLabel="@string/shortcut_sync">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="app.igit.sync.ShortcutSyncActivity"
+            android:targetPackage="app.igit" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_sync"
+        android:shortcutId="manual_sync"
+        android:shortcutShortLabel="@string/shortcut_manual_sync">
+        <intent
+            android:action="app.igit.action.MANUAL_SYNC_SHORTCUT"
+            android:targetClass="app.igit.MainActivity"
+            android:targetPackage="app.igit" />
+    </shortcut>
+</shortcuts>

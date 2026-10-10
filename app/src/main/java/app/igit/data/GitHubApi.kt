@@ -6,24 +6,34 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-
-data class GitHubRepo(val owner: String, val name: String, val branch: String, val privateRepo: Boolean) {
+data class GitHubRepo(val owner: String, val name: String, val branch: String, val privateRepo: Boolean, val cloneUrl: String, val sshUrl: String) {
     val fullName: String get() = "$owner/$name"
-    val cloneUrl: String get() = "https://github.com/$fullName.git"
 }
 
-data class CommitSummary(
-    val sha: String,
-    val message: String,
+data class GitHubTicket(
+    val number: Int,
+    val title: String,
+    val state: String,
     val author: String,
-    val relativeTime: String,
-    val additions: Int = 0,
-    val deletions: Int = 0
+    val url: String,
+    val body: String = "",
+    val comments: Int = 0,
+    val updatedAt: String = "",
+    val head: String = "",
+    val base: String = "",
+    val draft: Boolean = false
 )
 
-data class GitHubTicket(val number: Int, val title: String, val state: String, val author: String, val url: String)
+data class GitHubComment(val author: String, val body: String, val createdAt: String)
 
+data class WorkflowRun(val id: Long, val name: String, val title: String, val status: String, val conclusion: String, val branch: String, val event: String, val url: String, val createdAt: String)
+
+enum class TicketFilter(val label: String, val api: String) { OPEN("Open", "open"), CLOSED("Closed", "closed"), ALL("All", "all") }
+
+/** Minimal GitHub REST client for the provider tools (issues, pull requests, workflow runs). */
 class GitHubApi(private val token: String) {
+    fun user(): String = (request("GET", "/user") as JSONObject).optString("login")
+
     fun listRepos(): List<GitHubRepo> {
         val json = request("GET", "/user/repos?per_page=100&sort=updated") as JSONArray
         return (0 until json.length()).mapNotNull { i ->
@@ -31,66 +41,90 @@ class GitHubApi(private val token: String) {
             val owner = item.optJSONObject("owner")?.optString("login").orEmpty()
             val name = item.optString("name")
             if (owner.isBlank() || name.isBlank()) null else GitHubRepo(
-                owner, name, item.optString("default_branch", "main"), item.optBoolean("private")
+                owner, name, item.optString("default_branch", "main"), item.optBoolean("private"),
+                item.optString("clone_url", "https://github.com/$owner/$name.git"),
+                item.optString("ssh_url", "git@github.com:$owner/$name.git")
             )
         }
     }
 
-    fun commits(owner: String, repo: String, branch: String): List<CommitSummary> {
-        val json = request("GET", "/repos/${segment(owner)}/${segment(repo)}/commits?sha=${query(branch)}&per_page=20") as JSONArray
-        return (0 until json.length()).mapNotNull { i ->
-            val item = json.optJSONObject(i) ?: return@mapNotNull null
-            val commit = item.optJSONObject("commit") ?: JSONObject()
-            val author = commit.optJSONObject("author") ?: JSONObject()
-            val stats = item.optJSONObject("stats") ?: JSONObject()
-            CommitSummary(
-                sha = item.optString("sha").take(7),
-                message = commit.optString("message").lineSequence().firstOrNull().orEmpty(),
-                author = author.optString("name", "Contributor"),
-                relativeTime = commit.optJSONObject("author")?.optString("date").orEmpty().take(10),
-                additions = stats.optInt("additions"),
-                deletions = stats.optInt("deletions")
-            )
+    fun issues(owner: String, repo: String, filter: TicketFilter): List<GitHubTicket> {
+        val json = request("GET", "${base(owner, repo)}/issues?state=${filter.api}&per_page=50") as JSONArray
+        return (0 until json.length()).mapNotNull { json.optJSONObject(it) }
+            .filter { !it.has("pull_request") }
+            .map(::ticket)
+    }
+
+    fun pullRequests(owner: String, repo: String, filter: TicketFilter): List<GitHubTicket> {
+        val json = request("GET", "${base(owner, repo)}/pulls?state=${filter.api}&per_page=50") as JSONArray
+        return (0 until json.length()).mapNotNull { json.optJSONObject(it)?.let(::ticket) }
+    }
+
+    fun issue(owner: String, repo: String, number: Int): GitHubTicket =
+        ticket(request("GET", "${base(owner, repo)}/issues/$number") as JSONObject)
+
+    fun pullRequest(owner: String, repo: String, number: Int): GitHubTicket =
+        ticket(request("GET", "${base(owner, repo)}/pulls/$number") as JSONObject)
+
+    fun comments(owner: String, repo: String, number: Int): List<GitHubComment> {
+        val json = request("GET", "${base(owner, repo)}/issues/$number/comments?per_page=100") as JSONArray
+        return (0 until json.length()).mapNotNull { json.optJSONObject(it) }.map {
+            GitHubComment(it.optJSONObject("user")?.optString("login").orEmpty(), it.optString("body"), it.optString("created_at").take(10))
         }
     }
 
-    fun issues(owner: String, repo: String): List<GitHubTicket> = tickets(
-        request("GET", "/repos/${segment(owner)}/${segment(repo)}/issues?state=open&per_page=30") as JSONArray
-    ).filter { it.url.contains("/issues/") }
-
-    fun pullRequests(owner: String, repo: String): List<GitHubTicket> = tickets(
-        request("GET", "/repos/${segment(owner)}/${segment(repo)}/pulls?state=open&per_page=30") as JSONArray
-    )
-
-    fun createIssue(owner: String, repo: String, title: String, body: String): GitHubTicket {
-        val payload = JSONObject().put("title", title).put("body", body)
-        return ticket(request("POST", "/repos/${segment(owner)}/${segment(repo)}/issues", payload) as JSONObject)
+    fun addComment(owner: String, repo: String, number: Int, body: String) {
+        request("POST", "${base(owner, repo)}/issues/$number/comments", JSONObject().put("body", body))
     }
+
+    fun setState(owner: String, repo: String, number: Int, open: Boolean) {
+        request("PATCH", "${base(owner, repo)}/issues/$number", JSONObject().put("state", if (open) "open" else "closed"))
+    }
+
+    fun createIssue(owner: String, repo: String, title: String, body: String): GitHubTicket =
+        ticket(request("POST", "${base(owner, repo)}/issues", JSONObject().put("title", title).put("body", body)) as JSONObject)
 
     fun createPullRequest(owner: String, repo: String, title: String, body: String, head: String, base: String): GitHubTicket {
         val payload = JSONObject().put("title", title).put("body", body).put("head", head).put("base", base)
-        return ticket(request("POST", "/repos/${segment(owner)}/${segment(repo)}/pulls", payload) as JSONObject)
+        return ticket(request("POST", "${base(owner, repo)}/pulls", payload) as JSONObject)
     }
 
-    fun addComment(owner: String, repo: String, issueNumber: Int, body: String) {
-        request("POST", "/repos/${segment(owner)}/${segment(repo)}/issues/$issueNumber/comments", JSONObject().put("body", body))
+    fun workflowRuns(owner: String, repo: String): List<WorkflowRun> {
+        val json = request("GET", "${base(owner, repo)}/actions/runs?per_page=40") as JSONObject
+        val runs = json.optJSONArray("workflow_runs") ?: JSONArray()
+        return (0 until runs.length()).mapNotNull { runs.optJSONObject(it) }.map {
+            WorkflowRun(
+                id = it.optLong("id"), name = it.optString("name"), title = it.optString("display_title"),
+                status = it.optString("status"), conclusion = it.optString("conclusion").takeIf { c -> c != "null" }.orEmpty(),
+                branch = it.optString("head_branch"), event = it.optString("event"), url = it.optString("html_url"),
+                createdAt = it.optString("created_at").take(10)
+            )
+        }
     }
 
-    private fun tickets(array: JSONArray): List<GitHubTicket> = (0 until array.length()).mapNotNull { i ->
-        array.optJSONObject(i)?.let(::ticket)
-    }
+    private fun base(owner: String, repo: String) = "/repos/${segment(owner)}/${segment(repo)}"
 
     private fun ticket(item: JSONObject) = GitHubTicket(
         number = item.optInt("number"),
         title = item.optString("title"),
-        state = item.optString("state", "open"),
+        state = if (item.optBoolean("merged", false) || item.optString("merged_at").let { it.isNotBlank() && it != "null" }) "merged" else item.optString("state", "open"),
         author = item.optJSONObject("user")?.optString("login").orEmpty(),
-        url = item.optString("html_url")
+        url = item.optString("html_url"),
+        body = item.optString("body").takeIf { it != "null" }.orEmpty(),
+        comments = item.optInt("comments"),
+        updatedAt = item.optString("updated_at").take(10),
+        head = item.optJSONObject("head")?.optString("ref").orEmpty(),
+        base = item.optJSONObject("base")?.optString("ref").orEmpty(),
+        draft = item.optBoolean("draft")
     )
 
     private fun request(method: String, path: String, body: JSONObject? = null): Any {
         val connection = URL("https://api.github.com$path").openConnection() as HttpURLConnection
-        connection.requestMethod = method
+        // HttpURLConnection rejects PATCH; GitHub honours the override header.
+        if (method == "PATCH") {
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("X-HTTP-Method-Override", "PATCH")
+        } else connection.requestMethod = method
         connection.connectTimeout = 15_000
         connection.readTimeout = 25_000
         connection.setRequestProperty("Accept", "application/vnd.github+json")
@@ -113,5 +147,4 @@ class GitHubApi(private val token: String) {
     }
 
     private fun segment(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
-    private fun query(value: String) = URLEncoder.encode(value, "UTF-8")
 }
